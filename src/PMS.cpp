@@ -6,21 +6,18 @@ PMS::PMS(Stream& stream)
   this->_stream = &stream;
 }
 
-// Standby mode. For low power consumption and prolong the life of the sensor.
 void PMS::sleep()
 {
   uint8_t command[] = { 0x42, 0x4D, 0xE4, 0x00, 0x00, 0x01, 0x73 };
   _stream->write(command, sizeof(command));
 }
 
-// Operating mode. Stable data should be got at least 30 seconds after the sensor wakeup from the sleep mode because of the fan's performance.
 void PMS::wakeUp()
 {
   uint8_t command[] = { 0x42, 0x4D, 0xE4, 0x00, 0x01, 0x01, 0x74 };
   _stream->write(command, sizeof(command));
 }
 
-// Active mode. Default mode after power up. In this mode sensor would send serial data to the host automatically.
 void PMS::activeMode()
 {
   uint8_t command[] = { 0x42, 0x4D, 0xE1, 0x00, 0x01, 0x01, 0x71 };
@@ -28,7 +25,6 @@ void PMS::activeMode()
   _mode = MODE_ACTIVE;
 }
 
-// Passive mode. In this mode sensor would send serial data to the host only for request.
 void PMS::passiveMode()
 {
   uint8_t command[] = { 0x42, 0x4D, 0xE1, 0x00, 0x00, 0x01, 0x70 };
@@ -36,7 +32,6 @@ void PMS::passiveMode()
   _mode = MODE_PASSIVE;
 }
 
-// Request read in Passive Mode.
 void PMS::requestRead()
 {
   if (_mode == MODE_PASSIVE)
@@ -46,16 +41,13 @@ void PMS::requestRead()
   }
 }
 
-// Non-blocking function for parse response.
 bool PMS::read(DATA& data)
 {
   _data = &data;
   loop();
-  
   return _status == STATUS_OK;
 }
 
-// Blocking function for parse response. Default timeout is 1s.
 bool PMS::readUntil(DATA& data, uint16_t timeout)
 {
   _data = &data;
@@ -79,10 +71,7 @@ void PMS::loop()
     switch (_index)
     {
     case 0:
-      if (ch != 0x42)
-      {
-        return;
-      }
+      if (ch != 0x42) return;
       _calculatedChecksum = ch;
       break;
 
@@ -102,7 +91,7 @@ void PMS::loop()
 
     case 3:
       _frameLen |= ch;
-      // Unsupported sensor, different frame length, transmission error e.t.c.
+      // 2*9+2 = 20 (algunos modelos antiguos), 2*13+2 = 28 (PMSx003 y PMST)
       if (_frameLen != 2 * 9 + 2 && _frameLen != 2 * 13 + 2)
       {
         _index = 0;
@@ -134,9 +123,10 @@ void PMS::loop()
           _data->PM_AE_UG_2_5 = makeWord(_payload[8], _payload[9]);
           _data->PM_AE_UG_10_0 = makeWord(_payload[10], _payload[11]);
 
-          // Temperature & humidity (PMSxxxxT units)
-          _data->TEMP = (makeWord(_payload[20], _payload[21])) / 10.0;
-          _data->HUMI = (makeWord(_payload[22], _payload[23])) / 10.0;
+          // Temperature & humidity (PMSxxxxST units only)
+          // CORRECCIÓN: Cast a int16_t para manejar correctamente valores bajo cero
+          _data->TEMP = (int16_t)makeWord(_payload[20], _payload[21]) / 10.0;
+          _data->HUMI = (int16_t)makeWord(_payload[22], _payload[23]) / 10.0;
         }
 
         _index = 0;
@@ -147,13 +137,11 @@ void PMS::loop()
         _calculatedChecksum += ch;
         uint8_t payloadIndex = _index - 4;
 
-        // Payload is common to all sensors (first 2x6 bytes).
         if (payloadIndex < sizeof(_payload))
         {
           _payload[payloadIndex] = ch;
         }
       }
-
       break;
     }
 

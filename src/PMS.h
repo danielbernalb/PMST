@@ -9,7 +9,6 @@ public:
   static const uint16_t SINGLE_RESPONSE_TIME = 1000;
   static const uint16_t TOTAL_RESPONSE_TIME = 1000 * 10;
   static const uint16_t STEADY_RESPONSE_TIME = 1000 * 30;
-
   static const uint16_t BAUD_RATE = 9600;
 
   struct DATA {
@@ -24,6 +23,8 @@ public:
     uint16_t PM_AE_UG_10_0;
 
     // Temperature & humidity - PMSxxxxST units only
+    // NOTA: En sensores PMS antiguos, estos campos contendrán 
+    // los conteos de partículas de 5.0um y 10.0um divididos por 10.
     float TEMP;
     float HUMI;
   };
@@ -33,8 +34,8 @@ public:
   void wakeUp();
   void activeMode();
   void passiveMode();
-
   void requestRead();
+  
   bool read(DATA& data);
   bool readUntil(DATA& data, uint16_t timeout = SINGLE_RESPONSE_TIME);
 
@@ -42,16 +43,18 @@ private:
   enum STATUS { STATUS_WAITING, STATUS_OK };
   enum MODE { MODE_ACTIVE, MODE_PASSIVE };
 
-  uint8_t _payload[32];
+  uint8_t _payload[26]; // 13 datos * 2 bytes = 26 bytes exactos
+  
   Stream* _stream;
   DATA* _data;
-  STATUS _status;
+  
+  STATUS _status = STATUS_WAITING;
   MODE _mode = MODE_ACTIVE;
 
   uint8_t _index = 0;
-  uint16_t _frameLen;
-  uint16_t _checksum;
-  uint16_t _calculatedChecksum;
+  uint16_t _frameLen = 0;
+  uint16_t _checksum = 0;
+  uint16_t _calculatedChecksum = 0;
 
   void loop();
 };
